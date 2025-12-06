@@ -1,0 +1,64 @@
+plugins {
+    id 'java-library'
+    id 'io.github.goooler.shadow' version '8.1.7'
+    id 'xyz.jpenilla.run-paper' version '2.3.1'
+}
+
+group = 'dev.ua.theroer'
+version = '1.0.0'
+description = 'DoubleLife standalone plugin'
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+    maven { url 'https://repo.papermc.io/repository/maven-public/' }
+    maven { url 'https://oss.sonatype.org/content/repositories/snapshots' }
+}
+
+dependencies {
+    compileOnly 'io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT'
+    compileOnly 'net.luckperms:api:5.4'
+
+    implementation 'dev.ua.theroer:magicutils-bukkit:1.5.6'
+    annotationProcessor 'dev.ua.theroer:processor:1.5.6'
+    implementation 'com.google.code.gson:gson:2.10.1'
+
+    compileOnly 'org.projectlombok:lombok:1.18.32'
+    annotationProcessor 'org.projectlombok:lombok:1.18.32'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs += ['-parameters']
+}
+
+tasks.processResources {
+    def props = [version: version, description: description]
+    inputs.properties(props)
+    filteringCharset = 'UTF-8'
+    filesMatching(['plugin.yml']) {
+        expand(props)
+    }
+}
+
+tasks.shadowJar {
+    archiveClassifier.set('')
+    mergeServiceFiles()
+}
+
+tasks.build.dependsOn tasks.shadowJar
+
+tasks {
+    runServer {
+        dependsOn tasks.jar
+        minecraftVersion("1.21.8")
+        downloadPlugins {
+            modrinth("luckperms", "v5.5.17-bukkit")
+        }
+    }
+}

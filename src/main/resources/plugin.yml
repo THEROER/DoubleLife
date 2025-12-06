@@ -1,0 +1,15 @@
+name: DoubleLife
+version: ${version}
+main: dev.ua.theroer.doublelife.DoubleLifePlugin
+api-version: "1.20"
+authors:
+  - THEROER
+description: ${description}
+softdepend:
+  - LuckPerms
+commands:
+  doublelife:
+    description: Manage DoubleLife mode
+    aliases: [dl]
+    permission: doublelife.command
+    usage: /doublelife
