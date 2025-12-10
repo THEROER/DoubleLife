@@ -4,14 +4,14 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.ua.theroer.doublelife.config.WebhookSettings;
-import dev.ua.theroer.magicutils.Logger;
+import dev.ua.theroer.magicutils.logger.LoggerGen;
 
-import java.io.OutputStream;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
 import java.net.URI;
-import java.net.URL;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -30,6 +30,9 @@ public class WebhookManager {
     private final WebhookSettings settings;
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
         .withZone(ZoneId.systemDefault());
+    private final HttpClient httpClient = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofSeconds(5))
+        .build();
     private final ScheduledExecutorService aggregator = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "doublelife-webhook-aggregator");
         t.setDaemon(true);
@@ -95,47 +98,11 @@ public class WebhookManager {
 
     private void sendWebhook(String content, int color, UUID playerUuid) {
         CompletableFuture.runAsync(() -> {
-            try {
-                JsonObject json = new JsonObject();
-                json.addProperty("content", (String) null);
-                json.addProperty("username", "DoubleLife System");
-                json.addProperty("avatar_url", avatarUrl(playerUuid));
-
-                JsonObject embed = new JsonObject();
-                embed.addProperty("description", content);
-                embed.addProperty("color", color);
-                embed.addProperty("timestamp", Instant.now().toString());
-
-                JsonObject footer = new JsonObject();
-                footer.addProperty("text", "DoubleLife Plugin");
-                embed.add("footer", footer);
-
-                JsonArray embeds = new JsonArray();
-                embeds.add(embed);
-                json.add("embeds", embeds);
-
-                URL url = new URI(settings.getUrl()).toURL();
-                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                connection.setRequestMethod("POST");
-                connection.setRequestProperty("Content-Type", "application/json");
-                connection.setRequestProperty("User-Agent", "DoubleLife/1.0");
-                connection.setConnectTimeout(5000);
-                connection.setReadTimeout(5000);
-                connection.setUseCaches(false);
-                connection.setDoOutput(true);
-
-                try (OutputStream os = connection.getOutputStream()) {
-                    byte[] input = json.toString().getBytes(StandardCharsets.UTF_8);
-                    os.write(input, 0, input.length);
-                }
-
-                int responseCode = connection.getResponseCode();
-                if (responseCode != 204) {
-                    Logger.warn().send("Discord webhook returned code: " + responseCode);
-                }
-                connection.disconnect();
-            } catch (Exception e) {
-                Logger.error().send("Failed to send Discord webhook: " + e.getMessage());
+            SendOutcome outcome = postWebhook(settings.getUrl(), content, color, playerUuid, false);
+            if (outcome.rateLimited()) {
+                LoggerGen.warn("Discord webhook is rate limited; message was dropped");
+            } else if (!outcome.success()) {
+                LoggerGen.warn("Discord webhook returned non-success status");
             }
         });
     }
@@ -162,94 +129,107 @@ public class WebhookManager {
             .replace("{action}", "Actions")
             .replace("{details}", joinedDetails)
             .replace("{time}", TIME_FORMAT.format(Instant.now()));
-        sendOrEditAction(playerUuid, message, 0xFFFF00);
+        sendOrEditAction(playerUuid, lines, message, 0xFFFF00);
     }
 
     public void shutdown() {
         aggregator.shutdownNow();
     }
 
-    private void sendOrEditAction(UUID playerUuid, String content, int color) {
+    private void sendOrEditAction(UUID playerUuid, List<String> lines, String content, int color) {
         if (!settings.isActionBatchEdit()) {
-            sendWebhook(content, color, playerUuid);
+            SendOutcome outcome = postWebhook(settings.getUrl(), content, color, playerUuid, false);
+            if (outcome.rateLimited()) {
+                requeueLines(playerUuid, lines);
+            }
             return;
         }
 
         String messageId = lastActionMessageId.get(playerUuid);
         if (messageId != null) {
-            boolean edited = tryEditWebhook(messageId, content, color, playerUuid);
-            if (edited) {
+            SendOutcome outcome = tryEditWebhook(messageId, content, color, playerUuid);
+            if (outcome.success()) {
                 return;
             }
-            lastActionMessageId.remove(playerUuid);
+            if (!outcome.rateLimited()) {
+                lastActionMessageId.remove(playerUuid);
+            } else {
+                requeueLines(playerUuid, lines);
+                return;
+            }
         }
 
-        String newId = sendWebhookCaptureId(content, color, playerUuid);
-        if (newId != null) {
-            lastActionMessageId.put(playerUuid, newId);
+        SendOutcome outcome = postWebhook(settings.getUrl(), content, color, playerUuid, true);
+        if (outcome.success() && outcome.messageId() != null) {
+            lastActionMessageId.put(playerUuid, outcome.messageId());
+        } else if (outcome.rateLimited()) {
+            requeueLines(playerUuid, lines);
         }
     }
 
-    private boolean tryEditWebhook(String messageId, String content, int color, UUID playerUuid) {
+    private SendOutcome tryEditWebhook(String messageId, String content, int color, UUID playerUuid) {
         try {
             String baseUrl = settings.getUrl();
-            URL url = new URI(baseUrl + "/messages/" + messageId).toURL();
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("PATCH");
-            connection.setRequestProperty("Content-Type", "application/json");
-            connection.setRequestProperty("User-Agent", "DoubleLife/1.0");
-            connection.setConnectTimeout(5000);
-            connection.setReadTimeout(5000);
-            connection.setUseCaches(false);
-            connection.setDoOutput(true);
-
             JsonObject json = buildPayload(content, color, playerUuid);
-            try (OutputStream os = connection.getOutputStream()) {
-                os.write(json.toString().getBytes(StandardCharsets.UTF_8));
-            }
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI(baseUrl + "/messages/" + messageId))
+                .timeout(Duration.ofSeconds(5))
+                .header("Content-Type", "application/json")
+                .header("User-Agent", "DoubleLife/1.0")
+                .method("PATCH", HttpRequest.BodyPublishers.ofString(json.toString(), StandardCharsets.UTF_8))
+                .build();
 
-            int code = connection.getResponseCode();
-            connection.disconnect();
-            return code >= 200 && code < 300;
+            HttpResponse<Void> response = httpClient.send(request, HttpResponse.BodyHandlers.discarding());
+            int code = response.statusCode();
+            if (code == 429) {
+                return SendOutcome.rateLimitedResult();
+            }
+            return SendOutcome.result(code >= 200 && code < 300, false, null);
         } catch (Exception e) {
-            Logger.warn().send("Failed to edit Discord webhook: " + e.getMessage());
-            return false;
+            LoggerGen.warn("Failed to edit Discord webhook: " + e.getMessage());
+            return SendOutcome.failureResult();
         }
     }
 
-    private String sendWebhookCaptureId(String content, int color, UUID playerUuid) {
+    private SendOutcome postWebhook(String baseUrl, String content, int color, UUID playerUuid, boolean captureId) {
         try {
-            String baseUrl = settings.getUrl();
-            String withWait = baseUrl.contains("?") ? baseUrl + "&wait=true" : baseUrl + "?wait=true";
-            URL url = new URI(withWait).toURL();
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("POST");
-            connection.setRequestProperty("Content-Type", "application/json");
-            connection.setRequestProperty("User-Agent", "DoubleLife/1.0");
-            connection.setConnectTimeout(5000);
-            connection.setReadTimeout(5000);
-            connection.setUseCaches(false);
-            connection.setDoOutput(true);
+            String target = captureId
+                ? (baseUrl.contains("?") ? baseUrl + "&wait=true" : baseUrl + "?wait=true")
+                : baseUrl;
 
-            JsonObject json = buildPayload(content, color, playerUuid);
-            try (OutputStream os = connection.getOutputStream()) {
-                os.write(json.toString().getBytes(StandardCharsets.UTF_8));
+            JsonObject payload = buildPayload(content, color, playerUuid);
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI(target))
+                .timeout(Duration.ofSeconds(5))
+                .header("Content-Type", "application/json")
+                .header("User-Agent", "DoubleLife/1.0")
+                .POST(HttpRequest.BodyPublishers.ofString(payload.toString(), StandardCharsets.UTF_8))
+                .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            int code = response.statusCode();
+
+            if (code == 429) {
+                return SendOutcome.rateLimitedResult();
             }
 
-            int code = connection.getResponseCode();
             if (code >= 200 && code < 300) {
-                try (InputStreamReader reader = new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8)) {
-                    JsonObject obj = JsonParser.parseReader(reader).getAsJsonObject();
+                String id = null;
+                if (captureId) {
+                    JsonObject obj = JsonParser.parseString(response.body()).getAsJsonObject();
                     if (obj.has("id")) {
-                        return obj.get("id").getAsString();
+                        id = obj.get("id").getAsString();
                     }
                 }
+                return SendOutcome.result(true, false, id);
             }
-            connection.disconnect();
+
+            LoggerGen.warn("Discord webhook returned code: " + code);
+            return SendOutcome.failureResult();
         } catch (Exception e) {
-            Logger.warn().send("Failed to send Discord webhook (capture id): " + e.getMessage());
+            LoggerGen.error("Failed to send Discord webhook: " + e.getMessage());
+            return SendOutcome.failureResult();
         }
-        return null;
     }
 
     private JsonObject buildPayload(String content, int color, UUID playerUuid) {
@@ -271,6 +251,33 @@ public class WebhookManager {
         embeds.add(embed);
         json.add("embeds", embeds);
         return json;
+    }
+
+    private void requeueLines(UUID playerUuid, List<String> lines) {
+        LoggerGen.warn("Discord webhook hit rate limit; merging action logs and retrying soon");
+        pendingActions.compute(playerUuid, (id, existing) -> {
+            if (existing == null) {
+                return new ArrayList<>(lines);
+            }
+            existing.addAll(lines);
+            return existing;
+        });
+        int retryDelay = Math.max(3, settings.getActionBatchWindowSeconds());
+        aggregator.schedule(() -> flushActions(playerUuid), retryDelay, TimeUnit.SECONDS);
+    }
+
+    private record SendOutcome(boolean success, boolean rateLimited, String messageId) {
+        static SendOutcome rateLimitedResult() {
+            return new SendOutcome(false, true, null);
+        }
+
+        static SendOutcome failureResult() {
+            return new SendOutcome(false, false, null);
+        }
+
+        static SendOutcome result(boolean success, boolean rateLimited, String messageId) {
+            return new SendOutcome(success, rateLimited, messageId);
+        }
     }
 
     private String avatarUrl(UUID playerUuid) {

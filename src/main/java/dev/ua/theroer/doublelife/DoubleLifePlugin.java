@@ -5,12 +5,13 @@ import dev.ua.theroer.doublelife.config.DoubleLifeConfig;
 import dev.ua.theroer.doublelife.doublelife.DoubleLifeListener;
 import dev.ua.theroer.doublelife.doublelife.DoubleLifeManager;
 import dev.ua.theroer.doublelife.doublelife.webhook.WebhookLifecycleNotifier;
+import dev.ua.theroer.magicutils.HelpCommand;
 import dev.ua.theroer.magicutils.Logger;
 import dev.ua.theroer.magicutils.commands.CommandRegistry;
-import dev.ua.theroer.magicutils.commands.HelpCommand;
 import dev.ua.theroer.magicutils.config.ConfigManager;
 import dev.ua.theroer.magicutils.lang.LanguageManager;
 import dev.ua.theroer.magicutils.lang.Messages;
+import dev.ua.theroer.magicutils.logger.LoggerGen;
 import dev.ua.theroer.magicutils.platform.bukkit.BukkitPlatformProvider;
 import lombok.Getter;
 import net.luckperms.api.LuckPerms;
@@ -54,7 +55,7 @@ public final class DoubleLifePlugin extends JavaPlugin {
         registerLuckPerms();
 
         if (luckPerms == null) {
-            Logger.error().send("LuckPerms not found - disabling DoubleLife");
+            LoggerGen.error("LuckPerms not found - disabling DoubleLife");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
@@ -69,7 +70,7 @@ public final class DoubleLifePlugin extends JavaPlugin {
         lifecycleNotifier = new WebhookLifecycleNotifier(doubleLifeManager.getWebhookManager(), doubleLifeConfig.getWebhooks());
         lifecycleNotifier.onEnable();
 
-        Logger.info().send("DoubleLife plugin enabled");
+        LoggerGen.info("DoubleLife plugin enabled");
     }
 
     @Override
@@ -83,7 +84,7 @@ public final class DoubleLifePlugin extends JavaPlugin {
         if (configManager != null) {
             configManager.shutdown();
         }
-        Logger.info().send("DoubleLife disabled");
+        LoggerGen.info("DoubleLife disabled");
     }
 
     private void registerLuckPerms() {
@@ -93,6 +94,6 @@ public final class DoubleLifePlugin extends JavaPlugin {
             return;
         }
         luckPerms = provider.getProvider();
-        Logger.info().send("LuckPerms found - DoubleLife system enabled");
+        LoggerGen.info("LuckPerms found - DoubleLife system enabled");
     }
 }

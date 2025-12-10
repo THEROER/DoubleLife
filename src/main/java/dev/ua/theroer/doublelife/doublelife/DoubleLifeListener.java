@@ -44,7 +44,7 @@ public class DoubleLifeListener implements Listener {
     public void onPlayerCommand(PlayerCommandPreprocessEvent event) {
         Player player = event.getPlayer();
         if (manager.getSession(player.getUniqueId()) != null) {
-            String command = event.getMessage().split(" ")[0];
+            String command = event.getMessage().trim();
             manager.logAction(player, "Command", command);
         }
     }

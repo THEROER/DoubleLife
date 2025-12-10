@@ -7,9 +7,3 @@ authors:
 description: ${description}
 softdepend:
   - LuckPerms
-commands:
-  doublelife:
-    description: Manage DoubleLife mode
-    aliases: [dl]
-    permission: doublelife.command
-    usage: /doublelife
