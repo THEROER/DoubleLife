@@ -3,7 +3,7 @@ package dev.ua.theroer.doublelife.doublelife.storage;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import dev.ua.theroer.doublelife.doublelife.DoubleLifeSession;
-import dev.ua.theroer.magicutils.logger.LoggerGen;
+import dev.ua.theroer.magicutils.Logger;
 
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
@@ -57,9 +57,9 @@ public class InventoryStorage {
             try (Writer writer = Files.newBufferedWriter(sessionFile.toPath())) {
                 gson.toJson(data, writer);
             }
-            LoggerGen.debug("Saved DoubleLife session for " + session.getPlayerName());
+            Logger.debug("Saved DoubleLife session for " + session.getPlayerName());
         } catch (Exception e) {
-            LoggerGen.error("Failed to save DoubleLife session for " + session.getPlayerName() + ": " + e.getMessage());
+            Logger.error("Failed to save DoubleLife session for " + session.getPlayerName() + ": " + e.getMessage());
         }
     }
 
@@ -95,10 +95,10 @@ public class InventoryStorage {
             session.setOriginalGroups(java.util.Arrays.asList(data.originalGroups));
             session.setTemporaryGroupName(data.temporaryGroupName);
 
-            LoggerGen.debug("Loaded DoubleLife session for " + data.playerName);
+            Logger.debug("Loaded DoubleLife session for " + data.playerName);
             return session;
         } catch (Exception e) {
-            LoggerGen.error("Failed to load DoubleLife session for " + playerUuid + ": " + e.getMessage());
+            Logger.error("Failed to load DoubleLife session for " + playerUuid + ": " + e.getMessage());
             return null;
         }
     }
@@ -107,7 +107,7 @@ public class InventoryStorage {
         File sessionFile = new File(storageDir, playerUuid + ".json");
         if (sessionFile.exists()) {
             sessionFile.delete();
-            LoggerGen.debug("Deleted DoubleLife session file for " + playerUuid);
+            Logger.debug("Deleted DoubleLife session file for " + playerUuid);
         }
     }
 
@@ -138,7 +138,7 @@ public class InventoryStorage {
             byte[] bytes = item.serializeAsBytes();
             return Base64.getEncoder().encodeToString(bytes);
         } catch (Exception e) {
-            LoggerGen.warn("Failed to serialize item for DoubleLife: " + e.getMessage());
+            Logger.warn("Failed to serialize item for DoubleLife: " + e.getMessage());
             return null;
         }
     }
@@ -151,7 +151,7 @@ public class InventoryStorage {
             byte[] bytes = Base64.getDecoder().decode(base64);
             return ItemStack.deserializeBytes(bytes);
         } catch (Exception e) {
-            LoggerGen.warn("Failed to deserialize item for DoubleLife: " + e.getMessage());
+            Logger.warn("Failed to deserialize item for DoubleLife: " + e.getMessage());
             return null;
         }
     }

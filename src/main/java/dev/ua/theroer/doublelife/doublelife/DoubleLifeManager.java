@@ -6,7 +6,6 @@ import dev.ua.theroer.doublelife.config.DoubleLifeProfile;
 import dev.ua.theroer.doublelife.doublelife.storage.InventoryStorage;
 import dev.ua.theroer.doublelife.doublelife.webhook.WebhookManager;
 import dev.ua.theroer.magicutils.Logger;
-import dev.ua.theroer.magicutils.logger.LoggerGen;
 import net.luckperms.api.LuckPerms;
 import org.bukkit.Bukkit;
 import org.bukkit.attribute.Attribute;
@@ -53,14 +52,14 @@ public class DoubleLifeManager {
         if (!config.isEnabled()) {
             String reason = "DoubleLife is disabled.";
             Logger.error().to(player).send(reason);
-            LoggerGen.warn("Failed to start DoubleLife for " + player.getName() + ": " + reason);
+            Logger.warn("Failed to start DoubleLife for " + player.getName() + ": " + reason);
             return StartResult.error(reason);
         }
 
         if (activeSessions.containsKey(player.getUniqueId())) {
             String reason = "You already have an active DoubleLife session!";
             Logger.error().to(player).send(reason);
-            LoggerGen.warn("Failed to start DoubleLife for " + player.getName() + ": " + reason);
+            Logger.warn("Failed to start DoubleLife for " + player.getName() + ": " + reason);
             return StartResult.error(reason);
         }
 
@@ -68,7 +67,7 @@ public class DoubleLifeManager {
         if (applicableProfiles.isEmpty()) {
             String reason = "No DoubleLife profiles available for your rank.";
             Logger.error().to(player).send(reason);
-            LoggerGen.warn("Failed to start DoubleLife for " + player.getName() + ": " + reason);
+            Logger.warn("Failed to start DoubleLife for " + player.getName() + ": " + reason);
             return StartResult.error(reason);
         }
 
@@ -103,7 +102,7 @@ public class DoubleLifeManager {
         runCommands(config.getCommands().getAfterStart(), player, session);
         runCommands(collectProfileCommands(session, p -> p.getCommands().getAfterStart()), player, session);
 
-        LoggerGen.info("DoubleLife started for " + player.getName() + " with profiles: " + profiles);
+        Logger.info("DoubleLife started for " + player.getName() + " with profiles: " + profiles);
         return StartResult.ok();
     }
 
@@ -127,7 +126,7 @@ public class DoubleLifeManager {
         runCommands(config.getCommands().getAfterEnd(), player, session);
         runCommands(collectProfileCommands(session, p -> p.getCommands().getAfterEnd()), player, session);
 
-        LoggerGen.info("DoubleLife ended for " + player.getName());
+        Logger.info("DoubleLife ended for " + player.getName());
         return true;
     }
 
@@ -275,7 +274,7 @@ public class DoubleLifeManager {
                         session.end();
                         inventoryStorage.saveSession(session);
                         activeSessions.remove(entry.getKey());
-                        LoggerGen.info("DoubleLife session expired offline for " + session.getPlayerName() + "; inventory will be restored on next login");
+                        Logger.info("DoubleLife session expired offline for " + session.getPlayerName() + "; inventory will be restored on next login");
                     }
                 }
             }
@@ -310,9 +309,9 @@ public class DoubleLifeManager {
 
             bossBarManager.createBossBar(player, savedSession);
             Logger.success().to(player).send("Your DoubleLife session has been restored. Time remaining: " + savedSession.getFormattedRemainingTime());
-            LoggerGen.info("Restored active DoubleLife session for " + player.getName());
+            Logger.info("Restored active DoubleLife session for " + player.getName());
         } else {
-            LoggerGen.info("Expired DoubleLife session found for " + player.getName() + ", restoring inventory only");
+            Logger.info("Expired DoubleLife session found for " + player.getName() + ", restoring inventory only");
             restorePlayerState(player, savedSession);
             removeDoubleLifePermissions(player, savedSession);
             inventoryStorage.deleteSession(player.getUniqueId());

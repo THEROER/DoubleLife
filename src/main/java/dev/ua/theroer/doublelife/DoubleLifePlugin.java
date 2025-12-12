@@ -11,7 +11,6 @@ import dev.ua.theroer.magicutils.commands.CommandRegistry;
 import dev.ua.theroer.magicutils.config.ConfigManager;
 import dev.ua.theroer.magicutils.lang.LanguageManager;
 import dev.ua.theroer.magicutils.lang.Messages;
-import dev.ua.theroer.magicutils.logger.LoggerGen;
 import dev.ua.theroer.magicutils.platform.bukkit.BukkitPlatformProvider;
 import lombok.Getter;
 import net.luckperms.api.LuckPerms;
@@ -55,7 +54,7 @@ public final class DoubleLifePlugin extends JavaPlugin {
         registerLuckPerms();
 
         if (luckPerms == null) {
-            LoggerGen.error("LuckPerms not found - disabling DoubleLife");
+            Logger.error("LuckPerms not found - disabling DoubleLife");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
@@ -70,7 +69,7 @@ public final class DoubleLifePlugin extends JavaPlugin {
         lifecycleNotifier = new WebhookLifecycleNotifier(doubleLifeManager.getWebhookManager(), doubleLifeConfig.getWebhooks());
         lifecycleNotifier.onEnable();
 
-        LoggerGen.info("DoubleLife plugin enabled");
+        Logger.info("DoubleLife plugin enabled");
     }
 
     @Override
@@ -84,7 +83,7 @@ public final class DoubleLifePlugin extends JavaPlugin {
         if (configManager != null) {
             configManager.shutdown();
         }
-        LoggerGen.info("DoubleLife disabled");
+        Logger.info("DoubleLife disabled");
     }
 
     private void registerLuckPerms() {
@@ -94,6 +93,6 @@ public final class DoubleLifePlugin extends JavaPlugin {
             return;
         }
         luckPerms = provider.getProvider();
-        LoggerGen.info("LuckPerms found - DoubleLife system enabled");
+        Logger.info("LuckPerms found - DoubleLife system enabled");
     }
 }

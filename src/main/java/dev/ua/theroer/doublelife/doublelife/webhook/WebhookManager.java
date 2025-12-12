@@ -4,7 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.ua.theroer.doublelife.config.WebhookSettings;
-import dev.ua.theroer.magicutils.logger.LoggerGen;
+import dev.ua.theroer.magicutils.Logger;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -100,9 +100,9 @@ public class WebhookManager {
         CompletableFuture.runAsync(() -> {
             SendOutcome outcome = postWebhook(settings.getUrl(), content, color, playerUuid, false);
             if (outcome.rateLimited()) {
-                LoggerGen.warn("Discord webhook is rate limited; message was dropped");
+                Logger.warn("Discord webhook is rate limited; message was dropped");
             } else if (!outcome.success()) {
-                LoggerGen.warn("Discord webhook returned non-success status");
+                Logger.warn("Discord webhook returned non-success status");
             }
         });
     }
@@ -186,7 +186,7 @@ public class WebhookManager {
             }
             return SendOutcome.result(code >= 200 && code < 300, false, null);
         } catch (Exception e) {
-            LoggerGen.warn("Failed to edit Discord webhook: " + e.getMessage());
+            Logger.warn("Failed to edit Discord webhook: " + e.getMessage());
             return SendOutcome.failureResult();
         }
     }
@@ -224,10 +224,10 @@ public class WebhookManager {
                 return SendOutcome.result(true, false, id);
             }
 
-            LoggerGen.warn("Discord webhook returned code: " + code);
+            Logger.warn("Discord webhook returned code: " + code);
             return SendOutcome.failureResult();
         } catch (Exception e) {
-            LoggerGen.error("Failed to send Discord webhook: " + e.getMessage());
+            Logger.error("Failed to send Discord webhook: " + e.getMessage());
             return SendOutcome.failureResult();
         }
     }
@@ -254,7 +254,7 @@ public class WebhookManager {
     }
 
     private void requeueLines(UUID playerUuid, List<String> lines) {
-        LoggerGen.warn("Discord webhook hit rate limit; merging action logs and retrying soon");
+        Logger.warn("Discord webhook hit rate limit; merging action logs and retrying soon");
         pendingActions.compute(playerUuid, (id, existing) -> {
             if (existing == null) {
                 return new ArrayList<>(lines);
