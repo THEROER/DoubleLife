@@ -41,9 +41,11 @@ public class WebhookManager {
     private final Map<UUID, List<String>> pendingActions = new ConcurrentHashMap<>();
     private final Map<UUID, String> pendingNames = new ConcurrentHashMap<>();
     private final Map<UUID, String> lastActionMessageId = new ConcurrentHashMap<>();
+    private final Logger logger;
 
-    public WebhookManager(WebhookSettings settings) {
+    public WebhookManager(Logger logger, WebhookSettings settings) {
         this.settings = settings;
+        this.logger = logger;
     }
 
     public void sendStartNotification(String playerName, UUID playerUuid, String profiles, String duration) {
@@ -100,9 +102,9 @@ public class WebhookManager {
         CompletableFuture.runAsync(() -> {
             SendOutcome outcome = postWebhook(settings.getUrl(), content, color, playerUuid, false);
             if (outcome.rateLimited()) {
-                Logger.warn("Discord webhook is rate limited; message was dropped");
+                logger.warn("Discord webhook is rate limited; message was dropped");
             } else if (!outcome.success()) {
-                Logger.warn("Discord webhook returned non-success status");
+                logger.warn("Discord webhook returned non-success status");
             }
         });
     }
@@ -186,7 +188,7 @@ public class WebhookManager {
             }
             return SendOutcome.result(code >= 200 && code < 300, false, null);
         } catch (Exception e) {
-            Logger.warn("Failed to edit Discord webhook: " + e.getMessage());
+            logger.warn("Failed to edit Discord webhook: " + e.getMessage());
             return SendOutcome.failureResult();
         }
     }
@@ -224,10 +226,10 @@ public class WebhookManager {
                 return SendOutcome.result(true, false, id);
             }
 
-            Logger.warn("Discord webhook returned code: " + code);
+            logger.warn("Discord webhook returned code: " + code);
             return SendOutcome.failureResult();
         } catch (Exception e) {
-            Logger.error("Failed to send Discord webhook: " + e.getMessage());
+            logger.error("Failed to send Discord webhook: " + e.getMessage());
             return SendOutcome.failureResult();
         }
     }
@@ -254,7 +256,7 @@ public class WebhookManager {
     }
 
     private void requeueLines(UUID playerUuid, List<String> lines) {
-        Logger.warn("Discord webhook hit rate limit; merging action logs and retrying soon");
+        logger.warn("Discord webhook hit rate limit; merging action logs and retrying soon");
         pendingActions.compute(playerUuid, (id, existing) -> {
             if (existing == null) {
                 return new ArrayList<>(lines);

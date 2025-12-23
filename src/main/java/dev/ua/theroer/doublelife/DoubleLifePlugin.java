@@ -5,6 +5,7 @@ import dev.ua.theroer.doublelife.config.DoubleLifeConfig;
 import dev.ua.theroer.doublelife.doublelife.DoubleLifeListener;
 import dev.ua.theroer.doublelife.doublelife.DoubleLifeManager;
 import dev.ua.theroer.doublelife.doublelife.webhook.WebhookLifecycleNotifier;
+import dev.ua.theroer.doublelife.lang.DoubleLifeTranslations;
 import dev.ua.theroer.magicutils.HelpCommand;
 import dev.ua.theroer.magicutils.Logger;
 import dev.ua.theroer.magicutils.commands.CommandRegistry;
@@ -31,6 +32,8 @@ public final class DoubleLifePlugin extends JavaPlugin {
     @Getter
     private DoubleLifeManager doubleLifeManager;
     @Getter
+    private Logger mLogger;
+    @Getter
     private LuckPerms luckPerms;
     private WebhookLifecycleNotifier lifecycleNotifier;
 
@@ -42,19 +45,20 @@ public final class DoubleLifePlugin extends JavaPlugin {
         configManager = new ConfigManager(platform);
         languageManager = new LanguageManager(platform, configManager);
         languageManager.init("en");
+        DoubleLifeTranslations.register(languageManager);
         Messages.setLanguageManager(languageManager);
 
-        Logger.init(this, configManager);
-        Logger.setLanguageManager(languageManager);
-        Logger.setAutoLocalization(true);
+        mLogger = new Logger(platform, this, configManager);
+        mLogger.setLanguageManager(languageManager);
+        mLogger.setAutoLocalization(true);
 
-        CommandRegistry.initialize(this, "doublelife");
+        CommandRegistry.initialize(this, "doublelife", mLogger);
 
         doubleLifeConfig = configManager.register(DoubleLifeConfig.class);
         registerLuckPerms();
 
         if (luckPerms == null) {
-            Logger.error("LuckPerms not found - disabling DoubleLife");
+            mLogger.error("@doublelife.luckperms.missing");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
@@ -63,13 +67,13 @@ public final class DoubleLifePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new DoubleLifeListener(this), this);
         CommandRegistry.registerAll(
             new DoubleLifeCommand(this),
-            new HelpCommand()
+            new HelpCommand(mLogger)
         );
 
         lifecycleNotifier = new WebhookLifecycleNotifier(doubleLifeManager.getWebhookManager(), doubleLifeConfig.getWebhooks());
         lifecycleNotifier.onEnable();
 
-        Logger.info("DoubleLife plugin enabled");
+        mLogger.info("@doublelife.enabled");
     }
 
     @Override
@@ -83,7 +87,9 @@ public final class DoubleLifePlugin extends JavaPlugin {
         if (configManager != null) {
             configManager.shutdown();
         }
-        Logger.info("DoubleLife disabled");
+        if (mLogger != null) {
+            mLogger.info("@doublelife.disabled");
+        }
     }
 
     private void registerLuckPerms() {
@@ -93,6 +99,8 @@ public final class DoubleLifePlugin extends JavaPlugin {
             return;
         }
         luckPerms = provider.getProvider();
-        Logger.info("LuckPerms found - DoubleLife system enabled");
+        if (mLogger != null) {
+            mLogger.info("@doublelife.luckperms.found");
+        }
     }
 }

@@ -28,9 +28,11 @@ public class DoubleLifeCommand extends MagicCommand {
 
     private final DoubleLifePlugin plugin;
     private final DoubleLifeManager manager;
+    private final Logger logger;
 
     public DoubleLifeCommand(DoubleLifePlugin plugin) {
         this.plugin = plugin;
+        this.logger = plugin.getMLogger();
         this.manager = plugin.getDoubleLifeManager();
         if (this.manager == null) {
             throw new IllegalStateException("DoubleLifeManager is not initialized");
@@ -100,11 +102,11 @@ public class DoubleLifeCommand extends MagicCommand {
             return CommandResult.failure(target.getName() + " doesn't have an active DoubleLife session", false);
         }
 
-        Logger.info().to(sender).send("=== DoubleLife Info ===");
-        Logger.info().to(sender).send("Player: " + target.getName());
-        Logger.info().to(sender).send("Profiles: " + String.join(", ", session.getActiveProfiles()));
-        Logger.info().to(sender).send("Time Remaining: " + session.getFormattedRemainingTime());
-        Logger.info().to(sender).send("Active: " + (session.isActive() ? "Yes" : "No"));
+        logger.info().to(sender).send("=== DoubleLife Info ===");
+        logger.info().to(sender).send("Player: " + target.getName());
+        logger.info().to(sender).send("Profiles: " + String.join(", ", session.getActiveProfiles()));
+        logger.info().to(sender).send("Time Remaining: " + session.getFormattedRemainingTime());
+        logger.info().to(sender).send("Active: " + (session.isActive() ? "Yes" : "No"));
 
         return CommandResult.success();
     }
@@ -117,9 +119,9 @@ public class DoubleLifeCommand extends MagicCommand {
             return CommandResult.failure("No active DoubleLife sessions", false);
         }
 
-        Logger.info().to(sender).send("=== Active DoubleLife Sessions ===");
+        logger.info().to(sender).send("=== Active DoubleLife Sessions ===");
         for (DoubleLifeSession session : sessions) {
-            Logger.info().to(sender).send(
+            logger.info().to(sender).send(
                 session.getPlayerName() + " - " + session.getFormattedRemainingTime()
                     + " - " + String.join(", ", session.getActiveProfiles())
             );

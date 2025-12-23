@@ -31,13 +31,15 @@ public class DoubleLifeManager {
     private final WebhookManager webhookManager;
     private final DoubleLifeBossBarManager bossBarManager;
     private final LuckPermsHandler luckPermsHandler;
+    private final Logger logger;
 
     public DoubleLifeManager(DoubleLifePlugin plugin, DoubleLifeConfig config, LuckPerms luckPerms) {
         this.plugin = plugin;
         this.config = config;
+        this.logger = plugin.getMLogger();
         this.activeSessions = new ConcurrentHashMap<>();
         this.inventoryStorage = new InventoryStorage(plugin, config.getStoragePath());
-        this.webhookManager = new WebhookManager(config.getWebhooks());
+        this.webhookManager = new WebhookManager(logger, config.getWebhooks());
         this.bossBarManager = new DoubleLifeBossBarManager(plugin, config);
         this.luckPermsHandler = new LuckPermsHandler(luckPerms);
 
@@ -51,23 +53,23 @@ public class DoubleLifeManager {
     public StartResult startDoubleLife(Player player, int durationOverride) {
         if (!config.isEnabled()) {
             String reason = "DoubleLife is disabled.";
-            Logger.error().to(player).send(reason);
-            Logger.warn("Failed to start DoubleLife for " + player.getName() + ": " + reason);
+            logger.error().to(player).send(reason);
+            logger.warn("Failed to start DoubleLife for " + player.getName() + ": " + reason);
             return StartResult.error(reason);
         }
 
         if (activeSessions.containsKey(player.getUniqueId())) {
             String reason = "You already have an active DoubleLife session!";
-            Logger.error().to(player).send(reason);
-            Logger.warn("Failed to start DoubleLife for " + player.getName() + ": " + reason);
+            logger.error().to(player).send(reason);
+            logger.warn("Failed to start DoubleLife for " + player.getName() + ": " + reason);
             return StartResult.error(reason);
         }
 
         Set<String> applicableProfiles = getApplicableProfiles(player);
         if (applicableProfiles.isEmpty()) {
             String reason = "No DoubleLife profiles available for your rank.";
-            Logger.error().to(player).send(reason);
-            Logger.warn("Failed to start DoubleLife for " + player.getName() + ": " + reason);
+            logger.error().to(player).send(reason);
+            logger.warn("Failed to start DoubleLife for " + player.getName() + ": " + reason);
             return StartResult.error(reason);
         }
 
@@ -95,14 +97,14 @@ public class DoubleLifeManager {
 
         bossBarManager.createBossBar(player, session);
 
-        Logger.success().to(player).send("DoubleLife activated! Duration: " + session.getFormattedRemainingTime());
+        logger.success().to(player).send("DoubleLife activated! Duration: " + session.getFormattedRemainingTime());
         String profiles = String.join(", ", applicableProfiles);
         webhookManager.sendStartNotification(player.getName(), player.getUniqueId(), profiles, session.getFormattedRemainingTime());
 
         runCommands(config.getCommands().getAfterStart(), player, session);
         runCommands(collectProfileCommands(session, p -> p.getCommands().getAfterStart()), player, session);
 
-        Logger.info("DoubleLife started for " + player.getName() + " with profiles: " + profiles);
+        logger.info("DoubleLife started for " + player.getName() + " with profiles: " + profiles);
         return StartResult.ok();
     }
 
@@ -120,13 +122,13 @@ public class DoubleLifeManager {
         restorePlayerState(player, session);
         removeDoubleLifePermissions(player, session);
 
-        Logger.info().to(player).send("DoubleLife ended.");
+        logger.info().to(player).send("DoubleLife ended.");
         webhookManager.sendEndNotification(player.getName(), session.getPlayerUuid(), String.join(", ", session.getActiveProfiles()));
 
         runCommands(config.getCommands().getAfterEnd(), player, session);
         runCommands(collectProfileCommands(session, p -> p.getCommands().getAfterEnd()), player, session);
 
-        Logger.info("DoubleLife ended for " + player.getName());
+        logger.info("DoubleLife ended for " + player.getName());
         return true;
     }
 
@@ -274,7 +276,7 @@ public class DoubleLifeManager {
                         session.end();
                         inventoryStorage.saveSession(session);
                         activeSessions.remove(entry.getKey());
-                        Logger.info("DoubleLife session expired offline for " + session.getPlayerName() + "; inventory will be restored on next login");
+                        logger.info("DoubleLife session expired offline for " + session.getPlayerName() + "; inventory will be restored on next login");
                     }
                 }
             }
@@ -308,14 +310,14 @@ public class DoubleLifeManager {
             }
 
             bossBarManager.createBossBar(player, savedSession);
-            Logger.success().to(player).send("Your DoubleLife session has been restored. Time remaining: " + savedSession.getFormattedRemainingTime());
-            Logger.info("Restored active DoubleLife session for " + player.getName());
+            logger.success().to(player).send("Your DoubleLife session has been restored. Time remaining: " + savedSession.getFormattedRemainingTime());
+            logger.info("Restored active DoubleLife session for " + player.getName());
         } else {
-            Logger.info("Expired DoubleLife session found for " + player.getName() + ", restoring inventory only");
+            logger.info("Expired DoubleLife session found for " + player.getName() + ", restoring inventory only");
             restorePlayerState(player, savedSession);
             removeDoubleLifePermissions(player, savedSession);
             inventoryStorage.deleteSession(player.getUniqueId());
-            Logger.warn().to(player).send("Your DoubleLife session expired while you were offline. Your inventory has been restored.");
+            logger.warn().to(player).send("Your DoubleLife session expired while you were offline. Your inventory has been restored.");
             webhookManager.sendEndNotification(player.getName(), player.getUniqueId(), "Session expired (offline)");
         }
     }
