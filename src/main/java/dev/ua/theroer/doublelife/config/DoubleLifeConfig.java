@@ -10,10 +10,10 @@ import lombok.Getter;
 
 import java.util.Map;
 
-@ConfigFile("doublelife.yml")
-@ConfigReloadable
-@Comment("DoubleLife configuration")
 @Getter
+@ConfigReloadable
+@ConfigFile("doublelife.yml")
+@Comment("DoubleLife configuration")
 public class DoubleLifeConfig {
 
     @ConfigValue("enabled")

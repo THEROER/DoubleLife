@@ -11,8 +11,8 @@ import java.util.Map;
 import java.util.Arrays;
 import java.util.HashMap;
 
-@ConfigSerializable
 @Getter @Setter
+@ConfigSerializable
 public class DoubleLifeProfile {
     @ConfigValue("group-name")
     private String groupName;
