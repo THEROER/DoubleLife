@@ -8,6 +8,8 @@ group = 'dev.ua.theroer'
 version = '1.0.1'
 description = 'DoubleLife standalone plugin'
 
+def magicutilsVersion = '1.9.1'
+
 repositories {
     mavenLocal()
     mavenCentral()
@@ -19,8 +21,9 @@ dependencies {
     compileOnly 'io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT'
     compileOnly 'net.luckperms:api:5.4'
 
-    implementation 'dev.ua.theroer:magicutils-bukkit:1.7.0'
-    annotationProcessor 'dev.ua.theroer:magicutils-processor:1.7.0'
+    implementation "dev.ua.theroer:magicutils-bukkit:${magicutilsVersion}"
+    implementation "dev.ua.theroer:magicutils-config-yaml:${magicutilsVersion}"
+    annotationProcessor "dev.ua.theroer:magicutils-processor:${magicutilsVersion}"
     implementation 'com.google.code.gson:gson:2.10.1'
 
     compileOnly 'org.projectlombok:lombok:1.18.32'

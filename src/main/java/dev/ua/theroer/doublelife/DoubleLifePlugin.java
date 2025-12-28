@@ -9,6 +9,7 @@ import dev.ua.theroer.doublelife.lang.DoubleLifeTranslations;
 import dev.ua.theroer.magicutils.HelpCommand;
 import dev.ua.theroer.magicutils.Logger;
 import dev.ua.theroer.magicutils.commands.CommandRegistry;
+import dev.ua.theroer.magicutils.commands.HelpCommandSupport;
 import dev.ua.theroer.magicutils.config.ConfigManager;
 import dev.ua.theroer.magicutils.lang.LanguageManager;
 import dev.ua.theroer.magicutils.lang.Messages;
@@ -22,7 +23,6 @@ public final class DoubleLifePlugin extends JavaPlugin {
 
     @Getter
     private static DoubleLifePlugin instance;
-
     @Getter
     private ConfigManager configManager;
     @Getter
@@ -66,11 +66,12 @@ public final class DoubleLifePlugin extends JavaPlugin {
         doubleLifeManager = new DoubleLifeManager(this, doubleLifeConfig, luckPerms);
         getServer().getPluginManager().registerEvents(new DoubleLifeListener(this), this);
         CommandRegistry.registerAll(
-            new DoubleLifeCommand(this),
-            new HelpCommand(mLogger)
-        );
+                new DoubleLifeCommand(this).addSubCommand(
+                    HelpCommandSupport.createHelpSubCommand("help",
+                        mLogger.getCore(), CommandRegistry::getCommandManager)));
 
-        lifecycleNotifier = new WebhookLifecycleNotifier(doubleLifeManager.getWebhookManager(), doubleLifeConfig.getWebhooks());
+        lifecycleNotifier = new WebhookLifecycleNotifier(doubleLifeManager.getWebhookManager(),
+                doubleLifeConfig.getWebhooks());
         lifecycleNotifier.onEnable();
 
         mLogger.info("@doublelife.enabled");
@@ -93,7 +94,8 @@ public final class DoubleLifePlugin extends JavaPlugin {
     }
 
     private void registerLuckPerms() {
-        RegisteredServiceProvider<LuckPerms> provider = getServer().getServicesManager().getRegistration(LuckPerms.class);
+        RegisteredServiceProvider<LuckPerms> provider = getServer().getServicesManager()
+                .getRegistration(LuckPerms.class);
         if (provider == null) {
             luckPerms = null;
             return;
