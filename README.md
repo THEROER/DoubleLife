@@ -1,6 +1,6 @@
 # DoubleLife
 
-A Bukkit/Paper plugin for **time-boxed elevated sessions** — a staff member
+A Bukkit/Paper plugin for **time-boxed elevated sessions**. A staff member
 starts a "second life" under a named profile, temporarily gains that profile's
 permissions/group for a set duration, then automatically reverts when it
 expires. Every session is announced and logged to Discord via webhooks. Built
@@ -16,7 +16,7 @@ on [MagicUtils](https://github.com/THEROER/MagicUtils).
   so a staff session doesn't touch their survival inventory.
 - On start, end and configurable in-session actions, DoubleLife posts to a
   Discord webhook (with action batching to avoid spam).
-- When the timer runs out — or on `/doublelife stop` — the session ends and the
+- When the timer runs out, or on `/doublelife stop`, the session ends and the
   player is reverted automatically.
 
 ## Requirements
@@ -39,7 +39,7 @@ Base command: `/doublelife`.
 
 ## Configuration
 
-`plugins/DoubleLife/doublelife.yml` — highlights:
+`plugins/DoubleLife/doublelife.yml`, highlights:
 
 ```yaml
 enabled: true
