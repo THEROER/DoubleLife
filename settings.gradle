@@ -1,1 +1,65 @@
-rootProject.name = "DoubleLife"
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenLocal()
+        maven { url = 'https://maven.theroer.dev/releases' }
+        maven { url = 'https://maven.fabricmc.net/' }
+        maven { url = 'https://maven.neoforged.net/releases' }
+    }
+    plugins {
+        // MagicUtils build-logic, resolved from mavenLocal (local dev) or
+        // maven.theroer.dev (CI / other machines). matrix-* drive the build
+        // matrix + smoke/release; consumer-bukkit wires the bukkit module to
+        // the active MagicUtils target (Paper API, classifier, toolchain).
+        def buildLogicVersion = providers.gradleProperty('magicutilsBuildLogicVersion').get()
+        id 'magicutils.matrix-settings' version buildLogicVersion
+        id 'magicutils.matrix-root' version buildLogicVersion
+        id 'magicutils.consumer-common' version buildLogicVersion
+        id 'magicutils.consumer-bukkit' version buildLogicVersion
+    }
+}
+
+plugins {
+    id 'magicutils.matrix-settings'
+}
+
+rootProject.name = 'DoubleLife'
+
+// DoubleLife supports the MagicUtils compatibility range 1.21.6 .. 26.2. The
+// active target (Minecraft version, Java, MagicUtils classifier) comes from
+// gradle/targets.properties via -Ptarget=mcXXXX. The matrix plugin includes
+// the right subprojects for the requested scenario/platform and exposes the
+// resolved target to every module via the `magicutilsTarget` extension.
+magicMatrix {
+    targetsFile = 'gradle/targets.properties'
+    publishingFile = 'gradle/publishing.properties'
+    defaultTarget = 'mc12110'
+
+    // Platform-neutral config POJOs + translations live in :common; the
+    // Bukkit-specific runtime (listeners, sessions, LuckPerms, webhook) in
+    // :bukkit.
+    commonProjects('common')
+
+    platform 'bukkit', ['bukkit']
+
+    scenario 'bukkit', ['bukkit'], 'Bukkit/Paper module'
+
+    // Compatibility smoke: launch a real Paper server per MC version and gate
+    // on the MagicUtils runtime diagnostics verdict. Runs the plugin with
+    // /doublelife + diagnostics wired through MagicUtils.
+    smoke { smoke ->
+        smoke.platform('bukkit') { p ->
+            p.runTask = ':bukkit:runServer --args=nogui'
+            p.successPattern = 'Done ('
+            p.entry('paper-121x') { e ->
+                e.versions = ['1.21.6-1.21.11']
+                e.smokeValues = ['1.21.11']
+            }
+            p.entry('paper-262') { e ->
+                e.versions = ['26.2']
+                e.smokeValues = ['26.2']
+                e.gradleProperties = ['target': 'mc262']
+            }
+        }
+    }
+}

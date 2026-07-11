@@ -1,9 +1,0 @@
-name: DoubleLife
-version: ${version}
-main: dev.ua.theroer.doublelife.DoubleLifePlugin
-api-version: "1.20"
-authors:
-  - THEROER
-description: ${description}
-softdepend:
-  - LuckPerms
