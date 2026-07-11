@@ -4,6 +4,7 @@ import dev.ua.theroer.doublelife.DoubleLifePlugin;
 import dev.ua.theroer.doublelife.config.DoubleLifeConfig;
 import dev.ua.theroer.doublelife.config.DoubleLifeProfile;
 import dev.ua.theroer.doublelife.config.SecondLifeMode;
+import dev.ua.theroer.doublelife.config.SwapSettings;
 import dev.ua.theroer.doublelife.doublelife.storage.FileKitStorage;
 import dev.ua.theroer.doublelife.doublelife.storage.FilePersonaStorage;
 import dev.ua.theroer.doublelife.doublelife.storage.InventoryStorage;
@@ -217,8 +218,22 @@ public class DoubleLifeManager {
         } else if (mode == SecondLifeMode.PERSONA) {
             PersonaStorage.PersonaData persona = personaStorage.load(player.getUniqueId());
             if (persona != null) {
-                player.getInventory().setContents(persona.inventory);
-                player.getInventory().setArmorContents(persona.armor);
+                SwapSettings swap = config.getSecondLife().getSwap();
+                if (swap.isInventory()) {
+                    player.getInventory().setContents(persona.inventory);
+                    player.getInventory().setArmorContents(persona.armor);
+                }
+                if (swap.isEnderChest()) {
+                    player.getEnderChest().setContents(persona.enderChest);
+                }
+                if (swap.isExperience()) {
+                    player.setExp(persona.exp);
+                    player.setLevel(persona.level);
+                }
+                if (swap.isHealthFood()) {
+                    player.setHealth(clampHealth(player, persona.health));
+                    player.setFoodLevel(persona.foodLevel);
+                }
             } else {
                 // First time on this server: seed the persona from the kit.
                 applyKit(player, seedKitName(session));
@@ -333,9 +348,23 @@ public class DoubleLifeManager {
         if (resolveSecondLifeMode(session) != SecondLifeMode.PERSONA) {
             return;
         }
+        SwapSettings swap = config.getSecondLife().getSwap();
         PersonaStorage.PersonaData persona = new PersonaStorage.PersonaData();
-        persona.inventory = player.getInventory().getContents().clone();
-        persona.armor = player.getInventory().getArmorContents().clone();
+        if (swap.isInventory()) {
+            persona.inventory = player.getInventory().getContents().clone();
+            persona.armor = player.getInventory().getArmorContents().clone();
+        }
+        if (swap.isEnderChest()) {
+            persona.enderChest = player.getEnderChest().getContents().clone();
+        }
+        if (swap.isExperience()) {
+            persona.exp = player.getExp();
+            persona.level = player.getLevel();
+        }
+        if (swap.isHealthFood()) {
+            persona.health = player.getHealth();
+            persona.foodLevel = player.getFoodLevel();
+        }
         personaStorage.save(player.getUniqueId(), persona);
     }
 
@@ -447,6 +476,29 @@ public class DoubleLifeManager {
 
     public boolean hasActiveSession(UUID playerUuid) {
         return activeSessions.containsKey(playerUuid);
+    }
+
+    /**
+     * Whether a player currently in their second life is protected from hostile
+     * mobs. Player-level overrides land in a later stage; for now this is the
+     * global default gated on having an active session.
+     */
+    public boolean isMobProtected(UUID playerUuid) {
+        if (!activeSessions.containsKey(playerUuid)) {
+            return false;
+        }
+        return config.getSecondLife().getMobProtection().isEnabled();
+    }
+
+    /**
+     * Whether a player in their second life keeps their inventory on death,
+     * so unique items in a persona can't be duplicated by dying.
+     */
+    public boolean keepsInventoryOnDeath(UUID playerUuid) {
+        if (!activeSessions.containsKey(playerUuid)) {
+            return false;
+        }
+        return config.getSecondLife().isDeathKeepsInventory();
     }
 
     public void handlePlayerJoin(Player player) {

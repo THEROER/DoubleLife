@@ -13,6 +13,8 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.Event;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
@@ -135,6 +137,35 @@ public class DoubleLifeListener implements Listener {
                 String entity = event.getEntity().getType().name();
                 manager.logAction(player, ActionCategory.COMBAT, "Attack", entity + " (" + event.getFinalDamage() + " damage)");
             }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onMobDamagePlayer(EntityDamageByEntityEvent event) {
+        // Cancel damage dealt to a protected player by anything that isn't another player.
+        if (event.getEntity() instanceof Player player
+            && !(event.getDamager() instanceof Player)
+            && manager.isMobProtected(player.getUniqueId())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onMobTarget(EntityTargetLivingEntityEvent event) {
+        if (event.getTarget() instanceof Player player
+            && manager.isMobProtected(player.getUniqueId())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onPlayerDeath(PlayerDeathEvent event) {
+        Player player = event.getEntity();
+        if (manager.keepsInventoryOnDeath(player.getUniqueId())) {
+            event.setKeepInventory(true);
+            event.getDrops().clear();
+            event.setKeepLevel(true);
+            event.setDroppedExp(0);
         }
     }
 

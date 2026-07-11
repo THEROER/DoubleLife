@@ -29,4 +29,13 @@ public class SecondLifeSettings {
     @ConfigSection("swap")
     @Comment("Which parts of player state belong to the second life")
     private SwapSettings swap = new SwapSettings();
+
+    @ConfigSection("mob-protection")
+    @Comment("Protect players in their second life from hostile mobs")
+    private MobProtectionSettings mobProtection = new MobProtectionSettings();
+
+    @ConfigValue("death-keeps-inventory")
+    @DefaultValue("true")
+    @Comment("Keep the second inventory on death instead of dropping it (prevents duplicating unique items)")
+    private boolean deathKeepsInventory = true;
 }
