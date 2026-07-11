@@ -4,7 +4,9 @@ import dev.ua.theroer.doublelife.DoubleLifePlugin;
 import dev.ua.theroer.doublelife.config.DoubleLifeConfig;
 import dev.ua.theroer.doublelife.doublelife.DoubleLifeManager;
 import dev.ua.theroer.doublelife.doublelife.DoubleLifeSession;
+import dev.ua.theroer.doublelife.doublelife.storage.KitStorage;
 import dev.ua.theroer.magicutils.Logger;
+import dev.ua.theroer.magicutils.logger.MessageParser;
 import dev.ua.theroer.magicutils.annotations.CommandInfo;
 import dev.ua.theroer.magicutils.annotations.DefaultValue;
 import dev.ua.theroer.magicutils.annotations.Permission;
@@ -102,11 +104,16 @@ public class DoubleLifeCommand extends MagicCommand {
             return CommandResult.failure(target.getName() + " doesn't have an active DoubleLife session", false);
         }
 
-        logger.info().to(sender).send("=== DoubleLife Info ===");
-        logger.info().to(sender).send("Player: " + target.getName());
-        logger.info().to(sender).send("Profiles: " + String.join(", ", session.getActiveProfiles()));
-        logger.info().to(sender).send("Time Remaining: " + session.getFormattedRemainingTime());
-        logger.info().to(sender).send("Active: " + (session.isActive() ? "Yes" : "No"));
+        String safe = MessageParser.escapeAttribute(target.getName());
+        logger.info().noPrefix().to(sender).send(
+            "<gray>=== <white>DoubleLife Info</white> ===</gray>\n"
+                + "<gray>Player: <white>" + target.getName() + "</white>\n"
+                + "<gray>Profiles: <white>" + String.join(", ", session.getActiveProfiles()) + "</white>\n"
+                + "<gray>Time Remaining: <white>" + session.getFormattedRemainingTime() + "</white>\n"
+                + "<gray>Active: <white>" + (session.isActive() ? "Yes" : "No") + "</white>\n"
+                + "<dark_gray>[<red><hover:show_text:'End this session'>"
+                + "<click:run_command:'/dl stop " + safe + "'>End DoubleLife</click></hover></red>]</dark_gray>"
+        );
 
         return CommandResult.success();
     }
@@ -119,13 +126,22 @@ public class DoubleLifeCommand extends MagicCommand {
             return CommandResult.failure("No active DoubleLife sessions", false);
         }
 
-        logger.info().to(sender).send("=== Active DoubleLife Sessions ===");
+        StringBuilder sb = new StringBuilder("<gray>=== <white>Active DoubleLife Sessions</white> ===</gray>");
         for (DoubleLifeSession session : sessions) {
-            logger.info().to(sender).send(
-                session.getPlayerName() + " - " + session.getFormattedRemainingTime()
-                    + " - " + String.join(", ", session.getActiveProfiles())
-            );
+            String name = session.getPlayerName();
+            String safe = MessageParser.escapeAttribute(name);
+            String profiles = MessageParser.escapeAttribute(String.join(", ", session.getActiveProfiles()));
+            sb.append("\n")
+                .append("<hover:show_text:'<gray>Profiles: <white>").append(profiles).append("</white><newline>")
+                .append("<gray>Remaining: <white>").append(session.getFormattedRemainingTime()).append("</white><newline>")
+                .append("<yellow>Click for full info'>")
+                .append("<click:run_command:'/dl info ").append(safe).append("'>")
+                .append("<aqua>").append(name).append("</aqua></click></hover> ")
+                .append("<gray>-</gray> <white>").append(session.getFormattedRemainingTime()).append("</white> ")
+                .append("<dark_gray>[<red><hover:show_text:'End this session'>")
+                .append("<click:run_command:'/dl stop ").append(safe).append("'>stop</click></hover></red>]</dark_gray>");
         }
+        logger.info().noPrefix().to(sender).send(sb.toString());
 
         return CommandResult.success();
     }
@@ -134,5 +150,66 @@ public class DoubleLifeCommand extends MagicCommand {
     public CommandResult reload(@NotNull CommandSender sender) {
         plugin.getConfigManager().reload(DoubleLifeConfig.class);
         return CommandResult.success("DoubleLife configuration reloaded");
+    }
+
+    @SubCommand(name = "save", path = {"kit"}, description = "Save your current inventory as a named kit preset")
+    public CommandResult kitSave(@Sender Player sender, @NotNull String name) {
+        KitStorage.KitData kit = new KitStorage.KitData();
+        kit.inventory = sender.getInventory().getContents().clone();
+        kit.armor = sender.getInventory().getArmorContents().clone();
+        manager.getKitStorage().save(name, kit);
+        return CommandResult.success("Saved kit '" + name + "'");
+    }
+
+    @SubCommand(name = "give", path = {"kit"}, description = "Give a saved kit to a player")
+    public CommandResult kitGive(
+        @NotNull CommandSender sender,
+        @NotNull String name,
+        @DefaultValue("@sender") Player target
+    ) {
+        KitStorage.KitData kit = manager.getKitStorage().load(name);
+        if (kit == null) {
+            return CommandResult.failure("No kit named '" + name + "'", false);
+        }
+        for (org.bukkit.inventory.ItemStack item : kit.inventory) {
+            if (item != null) {
+                target.getInventory().addItem(item.clone());
+            }
+        }
+        for (org.bukkit.inventory.ItemStack item : kit.armor) {
+            if (item != null) {
+                target.getInventory().addItem(item.clone());
+            }
+        }
+        return CommandResult.success("Gave kit '" + name + "' to " + target.getName(), false);
+    }
+
+    @SubCommand(name = "delete", path = {"kit"}, aliases = {"remove"}, description = "Delete a saved kit")
+    public CommandResult kitDelete(@NotNull CommandSender sender, @NotNull String name) {
+        if (manager.getKitStorage().delete(name)) {
+            return CommandResult.success("Deleted kit '" + name + "'");
+        }
+        return CommandResult.failure("No kit named '" + name + "'", false);
+    }
+
+    @SubCommand(name = "list", path = {"kit"}, description = "List saved kits")
+    public CommandResult kitList(@NotNull CommandSender sender) {
+        var names = manager.getKitStorage().names();
+        if (names.isEmpty()) {
+            return CommandResult.failure("No kits saved", false);
+        }
+        StringBuilder sb = new StringBuilder("<gray>=== <white>DoubleLife Kits</white> ===</gray>");
+        for (String name : names) {
+            String safe = MessageParser.escapeAttribute(name);
+            sb.append("\n")
+                .append("<hover:show_text:'<gray>Click to give <white>").append(safe).append("</white> to yourself'>")
+                .append("<click:run_command:'/dl kit give ").append(safe).append("'>")
+                .append("<aqua>").append(name).append("</aqua>")
+                .append("</click></hover> ")
+                .append("<dark_gray>[<red><hover:show_text:'Delete this kit'>")
+                .append("<click:suggest_command:'/dl kit delete ").append(safe).append("'>x</click></hover></red>]</dark_gray>");
+        }
+        logger.info().noPrefix().to(sender).send(sb.toString());
+        return CommandResult.success();
     }
 }

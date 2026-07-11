@@ -34,6 +34,14 @@ public class DoubleLifeProfile {
     @Comment("Override the global second-inventory mode for this profile: EMPTY | KIT | PERSONA (blank = inherit)")
     private SecondLifeMode secondLifeMode;
 
+    @ConfigValue("seed-kit")
+    @Comment("Kit given as the starting contents: the second inventory in KIT mode, or the first-time seed of a PERSONA (blank = none)")
+    private String seedKit;
+
+    @ConfigValue("always-give")
+    @Comment("Kits topped up on every entry if their items are missing (e.g. a moderator tool)")
+    private List<String> alwaysGive;
+
     public static Map<String, DoubleLifeProfile> defaults() {
         Map<String, DoubleLifeProfile> profiles = new HashMap<>();
 

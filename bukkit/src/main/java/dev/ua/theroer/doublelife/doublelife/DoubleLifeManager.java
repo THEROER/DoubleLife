@@ -4,9 +4,11 @@ import dev.ua.theroer.doublelife.DoubleLifePlugin;
 import dev.ua.theroer.doublelife.config.DoubleLifeConfig;
 import dev.ua.theroer.doublelife.config.DoubleLifeProfile;
 import dev.ua.theroer.doublelife.config.SecondLifeMode;
+import dev.ua.theroer.doublelife.doublelife.storage.FileKitStorage;
 import dev.ua.theroer.doublelife.doublelife.storage.FilePersonaStorage;
 import dev.ua.theroer.doublelife.doublelife.storage.InventoryStorage;
 import dev.ua.theroer.doublelife.doublelife.storage.ItemSerialization;
+import dev.ua.theroer.doublelife.doublelife.storage.KitStorage;
 import dev.ua.theroer.doublelife.doublelife.storage.PersonaStorage;
 import dev.ua.theroer.doublelife.doublelife.webhook.ActionCategory;
 import dev.ua.theroer.doublelife.doublelife.webhook.WebhookManager;
@@ -34,6 +36,7 @@ public class DoubleLifeManager {
     private final Map<UUID, DoubleLifeSession> activeSessions;
     private final InventoryStorage inventoryStorage;
     private final PersonaStorage personaStorage;
+    private final KitStorage kitStorage;
     private final WebhookManager webhookManager;
     private final DoubleLifeBossBarManager bossBarManager;
     private final LuckPermsHandler luckPermsHandler;
@@ -47,6 +50,7 @@ public class DoubleLifeManager {
         ItemSerialization itemSerialization = new ItemSerialization(logger);
         this.inventoryStorage = new InventoryStorage(plugin, config.getStoragePath(), itemSerialization);
         this.personaStorage = new FilePersonaStorage(plugin, config.getStoragePath(), itemSerialization);
+        this.kitStorage = new FileKitStorage(plugin, config.getStoragePath(), itemSerialization);
         this.webhookManager = new WebhookManager(logger, config.getWebhooks());
         this.bossBarManager = new DoubleLifeBossBarManager(plugin, config);
         this.luckPermsHandler = new LuckPermsHandler(luckPerms);
@@ -105,7 +109,11 @@ public class DoubleLifeManager {
 
         bossBarManager.createBossBar(player, session);
 
-        logger.success().to(player).send("DoubleLife activated! Duration: " + session.getFormattedRemainingTime());
+        logger.success().to(player).send(
+            "DoubleLife activated! Duration: " + session.getFormattedRemainingTime() + " "
+                + "<dark_gray>[<red><hover:show_text:'End your DoubleLife session'>"
+                + "<click:run_command:'/dl stop'>end</click></hover></red>]</dark_gray>"
+        );
         String profiles = String.join(", ", applicableProfiles);
         webhookManager.sendStartNotification(player.getName(), player.getUniqueId(), profiles, session.getFormattedRemainingTime());
 
@@ -187,9 +195,13 @@ public class DoubleLifeManager {
 
     /**
      * Installs the second-life state for a starting session according to its
-     * resolved mode: EMPTY wipes the player, PERSONA loads their stored second
-     * character (falling back to empty if none), KIT behaves as EMPTY until
-     * kit contents are wired up.
+     * resolved mode:
+     * <ul>
+     *   <li>EMPTY  — wipe to an empty second inventory.</li>
+     *   <li>KIT    — fresh copy of the profile's seed kit every time.</li>
+     *   <li>PERSONA — the stored second character, seeded from the kit on the very
+     *       first entry; always-give kits then top up any missing items.</li>
+     * </ul>
      */
     private void applySecondLife(Player player, DoubleLifeSession session) {
         player.getEnderChest().clear();
@@ -197,18 +209,93 @@ public class DoubleLifeManager {
         player.setLevel(0);
         player.setHealth(clampHealth(player, 20.0));
         player.setFoodLevel(20);
+        player.getInventory().clear();
 
         SecondLifeMode mode = resolveSecondLifeMode(session);
-        if (mode == SecondLifeMode.PERSONA) {
+        if (mode == SecondLifeMode.KIT) {
+            applyKit(player, seedKitName(session));
+        } else if (mode == SecondLifeMode.PERSONA) {
             PersonaStorage.PersonaData persona = personaStorage.load(player.getUniqueId());
             if (persona != null) {
                 player.getInventory().setContents(persona.inventory);
                 player.getInventory().setArmorContents(persona.armor);
-                return;
+            } else {
+                // First time on this server: seed the persona from the kit.
+                applyKit(player, seedKitName(session));
+            }
+            topUpAlwaysGive(player, session);
+        }
+        // EMPTY leaves the cleared inventory as-is.
+    }
+
+    /** Adds a kit's contents to the player without removing what they already hold. */
+    private void applyKit(Player player, String kitName) {
+        if (kitName == null || kitName.isEmpty()) {
+            return;
+        }
+        KitStorage.KitData kit = kitStorage.load(kitName);
+        if (kit == null) {
+            logger.warn("DoubleLife kit '" + kitName + "' not found; skipping");
+            return;
+        }
+        giveItems(player, kit.inventory);
+        for (org.bukkit.inventory.ItemStack armor : kit.armor) {
+            if (armor != null) {
+                player.getInventory().addItem(armor);
             }
         }
-        // EMPTY, KIT (until kit contents land), or PERSONA with no saved character.
-        player.getInventory().clear();
+    }
+
+    /**
+     * Ensures every item from the session's always-give kits is present, adding
+     * only what the player is missing so it isn't duplicated each entry.
+     */
+    private void topUpAlwaysGive(Player player, DoubleLifeSession session) {
+        for (String kitName : alwaysGiveKitNames(session)) {
+            KitStorage.KitData kit = kitStorage.load(kitName);
+            if (kit == null) {
+                logger.warn("DoubleLife always-give kit '" + kitName + "' not found; skipping");
+                continue;
+            }
+            for (org.bukkit.inventory.ItemStack item : kit.inventory) {
+                if (item != null && !player.getInventory().containsAtLeast(item, item.getAmount())) {
+                    player.getInventory().addItem(item.clone());
+                }
+            }
+        }
+    }
+
+    private void giveItems(Player player, org.bukkit.inventory.ItemStack[] contents) {
+        for (org.bukkit.inventory.ItemStack item : contents) {
+            if (item != null) {
+                player.getInventory().addItem(item.clone());
+            }
+        }
+    }
+
+    private String seedKitName(DoubleLifeSession session) {
+        for (String profileName : session.getActiveProfiles()) {
+            DoubleLifeProfile profile = config.getProfiles().get(profileName);
+            if (profile != null && profile.getSeedKit() != null && !profile.getSeedKit().isEmpty()) {
+                return profile.getSeedKit();
+            }
+        }
+        return null;
+    }
+
+    private java.util.List<String> alwaysGiveKitNames(DoubleLifeSession session) {
+        java.util.List<String> names = new ArrayList<>();
+        for (String profileName : session.getActiveProfiles()) {
+            DoubleLifeProfile profile = config.getProfiles().get(profileName);
+            if (profile != null && profile.getAlwaysGive() != null) {
+                names.addAll(profile.getAlwaysGive());
+            }
+        }
+        return names;
+    }
+
+    public KitStorage getKitStorage() {
+        return kitStorage;
     }
 
     /**
