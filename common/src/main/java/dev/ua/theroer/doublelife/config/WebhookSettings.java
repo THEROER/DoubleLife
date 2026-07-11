@@ -32,6 +32,31 @@ public class WebhookSettings {
     @Comment("Log player actions during DoubleLife")
     private boolean actionLog = true;
 
+    @ConfigValue("log-blocks")
+    @DefaultValue("true")
+    @Comment("Log block break/place and interactions")
+    private boolean logBlocks = true;
+
+    @ConfigValue("log-inventory")
+    @DefaultValue("true")
+    @Comment("Log container transfers, item drops and pickups")
+    private boolean logInventory = true;
+
+    @ConfigValue("log-commands")
+    @DefaultValue("true")
+    @Comment("Log commands executed during DoubleLife")
+    private boolean logCommands = true;
+
+    @ConfigValue("log-combat")
+    @DefaultValue("true")
+    @Comment("Log attacks on entities")
+    private boolean logCombat = true;
+
+    @ConfigValue("log-movement")
+    @DefaultValue("true")
+    @Comment("Log teleports and game mode changes")
+    private boolean logMovement = true;
+
     @ConfigValue("action-message")
     @DefaultValue("```yaml\\nDoubleLife Action\\nPlayer: {player}\\nAction: {action}\\nDetails: {details}\\n```")
     @Comment("Message format for action logs")

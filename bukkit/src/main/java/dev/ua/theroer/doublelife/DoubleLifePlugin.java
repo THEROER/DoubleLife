@@ -6,14 +6,13 @@ import dev.ua.theroer.doublelife.doublelife.DoubleLifeListener;
 import dev.ua.theroer.doublelife.doublelife.DoubleLifeManager;
 import dev.ua.theroer.doublelife.doublelife.webhook.WebhookLifecycleNotifier;
 import dev.ua.theroer.doublelife.lang.DoubleLifeTranslations;
-import dev.ua.theroer.magicutils.HelpCommand;
 import dev.ua.theroer.magicutils.Logger;
+import dev.ua.theroer.magicutils.bootstrap.BukkitBootstrap;
+import dev.ua.theroer.magicutils.bootstrap.MagicRuntime;
 import dev.ua.theroer.magicutils.commands.CommandRegistry;
 import dev.ua.theroer.magicutils.commands.HelpCommandSupport;
 import dev.ua.theroer.magicutils.config.ConfigManager;
 import dev.ua.theroer.magicutils.lang.LanguageManager;
-import dev.ua.theroer.magicutils.lang.Messages;
-import dev.ua.theroer.magicutils.platform.bukkit.BukkitPlatformProvider;
 import lombok.Getter;
 import net.luckperms.api.LuckPerms;
 import org.bukkit.plugin.RegisteredServiceProvider;
@@ -35,24 +34,25 @@ public final class DoubleLifePlugin extends JavaPlugin {
     private Logger mLogger;
     @Getter
     private LuckPerms luckPerms;
+    private CommandRegistry commandRegistry;
+    private MagicRuntime runtime;
     private WebhookLifecycleNotifier lifecycleNotifier;
 
     @Override
     public void onEnable() {
         instance = this;
 
-        var platform = new BukkitPlatformProvider(this);
-        configManager = new ConfigManager(platform);
-        languageManager = new LanguageManager(platform, configManager);
-        languageManager.init("en");
-        DoubleLifeTranslations.register(languageManager);
-        Messages.setLanguageManager(languageManager);
-
-        mLogger = new Logger(platform, this, configManager);
-        mLogger.setLanguageManager(languageManager);
-        mLogger.setAutoLocalization(true);
-
-        CommandRegistry.initialize(this, "doublelife", mLogger);
+        BukkitBootstrap.RuntimeResult bootstrap = BukkitBootstrap.forPlugin(this)
+                .permissionPrefix("doublelife")
+                .translations(DoubleLifeTranslations::register)
+                .enableCommands()
+                .enableDiagnostics()
+                .buildRuntime();
+        runtime = bootstrap.runtime();
+        configManager = bootstrap.configManager();
+        languageManager = bootstrap.languageManager();
+        mLogger = bootstrap.logger();
+        commandRegistry = bootstrap.commandRegistry();
 
         doubleLifeConfig = configManager.register(DoubleLifeConfig.class);
         registerLuckPerms();
@@ -65,10 +65,11 @@ public final class DoubleLifePlugin extends JavaPlugin {
 
         doubleLifeManager = new DoubleLifeManager(this, doubleLifeConfig, luckPerms);
         getServer().getPluginManager().registerEvents(new DoubleLifeListener(this), this);
-        CommandRegistry.registerAll(
-                new DoubleLifeCommand(this).addSubCommand(
-                    HelpCommandSupport.createHelpSubCommand("help",
-                        mLogger.getCore(), CommandRegistry::getCommandManager)));
+
+        DoubleLifeCommand command = new DoubleLifeCommand(this);
+        command.addSubCommand(HelpCommandSupport.createHelpSubCommand(
+                mLogger.getCore(), commandRegistry::commandManager));
+        commandRegistry.registerAllCommands(command);
 
         lifecycleNotifier = new WebhookLifecycleNotifier(doubleLifeManager.getWebhookManager(),
                 doubleLifeConfig.getWebhooks());
@@ -85,11 +86,11 @@ public final class DoubleLifePlugin extends JavaPlugin {
         if (lifecycleNotifier != null) {
             lifecycleNotifier.onDisable();
         }
-        if (configManager != null) {
-            configManager.shutdown();
-        }
         if (mLogger != null) {
             mLogger.info("@doublelife.disabled");
+        }
+        if (runtime != null) {
+            runtime.close();
         }
     }
 

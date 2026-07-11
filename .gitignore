@@ -110,6 +110,11 @@ gradle-app.setting
 
 # Common working directory
 run/
+# Dev-server working directories created by the run-paper / run-folia tasks
+run-paper*/
+run-folia*/
+**/run-paper*/
+**/run-folia*/
 
 # Avoid ignoring Gradle wrapper jar file (.jar files are usually ignored)
 !gradle-wrapper.jar

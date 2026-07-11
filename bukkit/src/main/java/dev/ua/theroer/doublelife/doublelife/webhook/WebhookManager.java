@@ -75,8 +75,11 @@ public class WebhookManager {
         sendWebhook(message, 0xFF0000, playerUuid);
     }
 
-    public void sendActionLog(String playerName, UUID playerUuid, String action, String details) {
+    public void sendActionLog(String playerName, UUID playerUuid, ActionCategory category, String action, String details) {
         if (!settings.isEnabled() || !settings.isActionLog() || settings.getUrl() == null || settings.getUrl().isEmpty()) {
+            return;
+        }
+        if (category != null && !category.isEnabled(settings)) {
             return;
         }
 
@@ -125,13 +128,40 @@ public class WebhookManager {
             return;
         }
         String playerName = pendingNames.getOrDefault(playerUuid, "Unknown");
-        String joinedDetails = String.join("\n", lines);
+        List<String> collapsed = collapseDuplicates(lines);
+        String joinedDetails = String.join("\n", collapsed);
         String message = format(settings.getActionMessage())
             .replace("{player}", playerName)
             .replace("{action}", "Actions")
             .replace("{details}", joinedDetails)
             .replace("{time}", TIME_FORMAT.format(Instant.now()));
         sendOrEditAction(playerUuid, lines, message, 0xFFFF00);
+    }
+
+    /**
+     * Collapses runs of identical consecutive action lines into a single "line xN" entry
+     * so repetitive activity (mining a vein, spamming a command) does not flood the log.
+     * Order is preserved; only adjacent duplicates are merged.
+     */
+    private List<String> collapseDuplicates(List<String> lines) {
+        List<String> result = new ArrayList<>();
+        String previous = null;
+        int count = 0;
+        for (String line : lines) {
+            if (line.equals(previous)) {
+                count++;
+                continue;
+            }
+            if (previous != null) {
+                result.add(count > 1 ? previous + " x" + count : previous);
+            }
+            previous = line;
+            count = 1;
+        }
+        if (previous != null) {
+            result.add(count > 1 ? previous + " x" + count : previous);
+        }
+        return result;
     }
 
     public void shutdown() {
@@ -234,25 +264,53 @@ public class WebhookManager {
         }
     }
 
+    // Discord Components v2 message flag (IS_COMPONENTS_V2 = 1 << 15).
+    private static final int FLAG_COMPONENTS_V2 = 1 << 15;
+    // Component type ids.
+    private static final int TYPE_TEXT_DISPLAY = 10;
+    private static final int TYPE_SEPARATOR = 14;
+    private static final int TYPE_CONTAINER = 17;
+
+    /**
+     * Builds a Components v2 payload: a single accent-colored container holding the
+     * message body and a footer, separated by a divider. With the V2 flag set, the
+     * legacy {@code content} and {@code embeds} fields must be omitted.
+     */
     private JsonObject buildPayload(String content, int color, UUID playerUuid) {
         JsonObject json = new JsonObject();
-        json.addProperty("content", (String) null);
         json.addProperty("username", "DoubleLife System");
         json.addProperty("avatar_url", avatarUrl(playerUuid));
+        json.addProperty("flags", FLAG_COMPONENTS_V2);
 
-        JsonObject embed = new JsonObject();
-        embed.addProperty("description", content);
-        embed.addProperty("color", color);
-        embed.addProperty("timestamp", Instant.now().toString());
+        JsonArray containerChildren = new JsonArray();
+        containerChildren.add(textDisplay(content));
+        containerChildren.add(separator());
+        containerChildren.add(textDisplay("-# DoubleLife Plugin • " + TIME_FORMAT.format(Instant.now())));
 
-        JsonObject footer = new JsonObject();
-        footer.addProperty("text", "DoubleLife Plugin");
-        embed.add("footer", footer);
+        JsonObject container = new JsonObject();
+        container.addProperty("type", TYPE_CONTAINER);
+        container.addProperty("accent_color", color);
+        container.add("components", containerChildren);
 
-        JsonArray embeds = new JsonArray();
-        embeds.add(embed);
-        json.add("embeds", embeds);
+        JsonArray components = new JsonArray();
+        components.add(container);
+        json.add("components", components);
         return json;
+    }
+
+    private JsonObject textDisplay(String content) {
+        JsonObject node = new JsonObject();
+        node.addProperty("type", TYPE_TEXT_DISPLAY);
+        node.addProperty("content", content);
+        return node;
+    }
+
+    private JsonObject separator() {
+        JsonObject node = new JsonObject();
+        node.addProperty("type", TYPE_SEPARATOR);
+        node.addProperty("divider", true);
+        node.addProperty("spacing", 1);
+        return node;
     }
 
     private void requeueLines(UUID playerUuid, List<String> lines) {

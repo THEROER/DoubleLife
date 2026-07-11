@@ -1,0 +1,13 @@
+name: DoubleLife
+version: ${version}
+main: dev.ua.theroer.doublelife.DoubleLifePlugin
+api-version: '1.21'
+author: THEROER
+description: ${description}
+folia-supported: true
+dependencies:
+  server:
+    LuckPerms:
+      load: BEFORE
+      required: true
+      join-classpath: true
