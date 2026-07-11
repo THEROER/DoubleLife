@@ -2,6 +2,7 @@ package dev.ua.theroer.doublelife.commands;
 
 import dev.ua.theroer.doublelife.DoubleLifePlugin;
 import dev.ua.theroer.doublelife.config.DoubleLifeConfig;
+import dev.ua.theroer.doublelife.config.PlayerSetting;
 import dev.ua.theroer.doublelife.doublelife.DoubleLifeManager;
 import dev.ua.theroer.doublelife.doublelife.DoubleLifeSession;
 import dev.ua.theroer.doublelife.doublelife.storage.KitStorage;
@@ -9,6 +10,7 @@ import dev.ua.theroer.magicutils.Logger;
 import dev.ua.theroer.magicutils.logger.MessageParser;
 import dev.ua.theroer.magicutils.annotations.CommandInfo;
 import dev.ua.theroer.magicutils.annotations.DefaultValue;
+import dev.ua.theroer.magicutils.annotations.OptionalArgument;
 import dev.ua.theroer.magicutils.annotations.Permission;
 import dev.ua.theroer.magicutils.annotations.Sender;
 import dev.ua.theroer.magicutils.annotations.SubCommand;
@@ -150,6 +152,61 @@ public class DoubleLifeCommand extends MagicCommand {
     public CommandResult reload(@NotNull CommandSender sender) {
         plugin.getConfigManager().reload(DoubleLifeConfig.class);
         return CommandResult.success("DoubleLife configuration reloaded");
+    }
+
+    @SubCommand(name = "settings", description = "Show your personal DoubleLife settings")
+    public CommandResult settings(@Sender Player sender) {
+        StringBuilder sb = new StringBuilder("<gray>=== <white>Your DoubleLife Settings</white> ===</gray>");
+        sb.append(settingLine(sender, PlayerSetting.MOB_PROTECTION, "Mob protection"));
+        logger.info().noPrefix().to(sender).send(sb.toString());
+        return CommandResult.success();
+    }
+
+    /** Renders one settings row with the current value and on/off/default toggles. */
+    private String settingLine(Player player, PlayerSetting setting, String label) {
+        java.util.UUID uuid = player.getUniqueId();
+        if (!manager.isSettingAdjustable(setting)) {
+            return "\n<gray>" + label + ": <dark_gray>locked by server</dark_gray>";
+        }
+        boolean effective = manager.effectiveSetting(uuid, setting);
+        boolean overridden = manager.hasSettingOverride(uuid, setting);
+        String key = setting.name();
+        String value = effective ? "<green>on</green>" : "<red>off</red>";
+        String source = overridden ? "" : " <dark_gray>(default)</dark_gray>";
+        // The value itself toggles; a reset link appears only when overridden.
+        String toggle = "<hover:show_text:'Click to toggle'>"
+            + "<click:run_command:'/dl settings set " + key + "'>" + value + "</click></hover>";
+        String reset = overridden
+            ? " <dark_gray>[<gray><hover:show_text:'Reset to server default'>"
+                + "<click:run_command:'/dl settings reset " + key + "'>reset</click></hover></gray>]</dark_gray>"
+            : "";
+        return "\n<gray>" + label + ": " + toggle + source + reset;
+    }
+
+    @SubCommand(name = "set", path = {"settings"}, description = "Set a personal DoubleLife setting (omit the value to toggle)")
+    public CommandResult settingsSet(
+        @Sender Player sender,
+        @NotNull PlayerSetting setting,
+        @OptionalArgument Boolean value
+    ) {
+        if (!manager.isSettingAdjustable(setting)) {
+            return CommandResult.failure("That setting is locked by the server", false);
+        }
+        // No value given: flip the current effective value.
+        boolean resolved = value != null
+            ? value
+            : !manager.effectiveSetting(sender.getUniqueId(), setting);
+        manager.setPlayerSetting(sender.getUniqueId(), setting, resolved);
+        return settings(sender);
+    }
+
+    @SubCommand(name = "reset", path = {"settings"}, description = "Reset a personal DoubleLife setting to the server default")
+    public CommandResult settingsReset(@Sender Player sender, @NotNull PlayerSetting setting) {
+        if (!manager.isSettingAdjustable(setting)) {
+            return CommandResult.failure("That setting is locked by the server", false);
+        }
+        manager.setPlayerSetting(sender.getUniqueId(), setting, null);
+        return settings(sender);
     }
 
     @SubCommand(name = "save", path = {"kit"}, description = "Save your current inventory as a named kit preset")

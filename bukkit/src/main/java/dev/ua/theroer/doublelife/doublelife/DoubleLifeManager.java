@@ -3,14 +3,17 @@ package dev.ua.theroer.doublelife.doublelife;
 import dev.ua.theroer.doublelife.DoubleLifePlugin;
 import dev.ua.theroer.doublelife.config.DoubleLifeConfig;
 import dev.ua.theroer.doublelife.config.DoubleLifeProfile;
+import dev.ua.theroer.doublelife.config.PlayerSetting;
 import dev.ua.theroer.doublelife.config.SecondLifeMode;
 import dev.ua.theroer.doublelife.config.SwapSettings;
 import dev.ua.theroer.doublelife.doublelife.storage.FileKitStorage;
 import dev.ua.theroer.doublelife.doublelife.storage.FilePersonaStorage;
 import dev.ua.theroer.doublelife.doublelife.storage.InventoryStorage;
 import dev.ua.theroer.doublelife.doublelife.storage.ItemSerialization;
+import dev.ua.theroer.doublelife.doublelife.storage.FilePlayerSettingsStorage;
 import dev.ua.theroer.doublelife.doublelife.storage.KitStorage;
 import dev.ua.theroer.doublelife.doublelife.storage.PersonaStorage;
+import dev.ua.theroer.doublelife.doublelife.storage.PlayerSettingsStorage;
 import dev.ua.theroer.doublelife.doublelife.webhook.ActionCategory;
 import dev.ua.theroer.doublelife.doublelife.webhook.WebhookManager;
 import dev.ua.theroer.magicutils.Logger;
@@ -38,6 +41,7 @@ public class DoubleLifeManager {
     private final InventoryStorage inventoryStorage;
     private final PersonaStorage personaStorage;
     private final KitStorage kitStorage;
+    private final PlayerSettingsStorage playerSettingsStorage;
     private final WebhookManager webhookManager;
     private final DoubleLifeBossBarManager bossBarManager;
     private final LuckPermsHandler luckPermsHandler;
@@ -52,6 +56,7 @@ public class DoubleLifeManager {
         this.inventoryStorage = new InventoryStorage(plugin, config.getStoragePath(), itemSerialization);
         this.personaStorage = new FilePersonaStorage(plugin, config.getStoragePath(), itemSerialization);
         this.kitStorage = new FileKitStorage(plugin, config.getStoragePath(), itemSerialization);
+        this.playerSettingsStorage = new FilePlayerSettingsStorage(plugin, config.getStoragePath());
         this.webhookManager = new WebhookManager(logger, config.getWebhooks());
         this.bossBarManager = new DoubleLifeBossBarManager(plugin, config);
         this.luckPermsHandler = new LuckPermsHandler(luckPerms);
@@ -487,7 +492,50 @@ public class DoubleLifeManager {
         if (!activeSessions.containsKey(playerUuid)) {
             return false;
         }
-        return config.getSecondLife().getMobProtection().isEnabled();
+        var mobProtection = config.getSecondLife().getMobProtection();
+        if (mobProtection.isPlayerAdjustable()) {
+            Boolean override = playerSettingsStorage.get(playerUuid, PlayerSetting.MOB_PROTECTION);
+            if (override != null) {
+                return override;
+            }
+        }
+        return mobProtection.isEnabled();
+    }
+
+    /** Whether a player-adjustable setting can currently be changed by players. */
+    public boolean isSettingAdjustable(PlayerSetting setting) {
+        if (setting == PlayerSetting.MOB_PROTECTION) {
+            return config.getSecondLife().getMobProtection().isPlayerAdjustable();
+        }
+        return false;
+    }
+
+    /**
+     * The player's effective value for a setting: their explicit choice if any,
+     * otherwise the server default.
+     */
+    public boolean effectiveSetting(UUID playerUuid, PlayerSetting setting) {
+        Boolean override = playerSettingsStorage.get(playerUuid, setting);
+        if (override != null) {
+            return override;
+        }
+        return serverDefault(setting);
+    }
+
+    /** Whether the player has an explicit choice (vs inheriting the default). */
+    public boolean hasSettingOverride(UUID playerUuid, PlayerSetting setting) {
+        return playerSettingsStorage.get(playerUuid, setting) != null;
+    }
+
+    public void setPlayerSetting(UUID playerUuid, PlayerSetting setting, Boolean value) {
+        playerSettingsStorage.set(playerUuid, setting, value);
+    }
+
+    private boolean serverDefault(PlayerSetting setting) {
+        if (setting == PlayerSetting.MOB_PROTECTION) {
+            return config.getSecondLife().getMobProtection().isEnabled();
+        }
+        return false;
     }
 
     /**
