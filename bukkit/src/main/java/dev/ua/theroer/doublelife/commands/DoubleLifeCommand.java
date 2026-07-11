@@ -21,6 +21,7 @@ import dev.ua.theroer.magicutils.commands.PermissionConditionType;
 
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
 @CommandInfo(
@@ -228,12 +229,12 @@ public class DoubleLifeCommand extends MagicCommand {
         if (kit == null) {
             return CommandResult.failure("No kit named '" + name + "'", false);
         }
-        for (org.bukkit.inventory.ItemStack item : kit.inventory) {
+        for (ItemStack item : kit.inventory) {
             if (item != null) {
                 target.getInventory().addItem(item.clone());
             }
         }
-        for (org.bukkit.inventory.ItemStack item : kit.armor) {
+        for (ItemStack item : kit.armor) {
             if (item != null) {
                 target.getInventory().addItem(item.clone());
             }

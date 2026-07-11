@@ -5,6 +5,7 @@ import dev.ua.theroer.doublelife.doublelife.webhook.ActionCategory;
 
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.entity.Mob;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -155,6 +156,11 @@ public class DoubleLifeListener implements Listener {
         if (event.getTarget() instanceof Player player
             && manager.isMobProtected(player.getUniqueId())) {
             event.setCancelled(true);
+            event.setTarget(null);
+            // Also drop any target the mob is already locked onto.
+            if (event.getEntity() instanceof Mob mob) {
+                mob.setTarget(null);
+            }
         }
     }
 

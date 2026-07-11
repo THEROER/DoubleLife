@@ -5,6 +5,7 @@ import dev.ua.theroer.doublelife.config.DoubleLifeConfig;
 import dev.ua.theroer.doublelife.config.DoubleLifeProfile;
 import dev.ua.theroer.doublelife.config.PlayerSetting;
 import dev.ua.theroer.doublelife.config.SecondLifeMode;
+import dev.ua.theroer.doublelife.config.StorageBackend;
 import dev.ua.theroer.doublelife.config.SwapSettings;
 import dev.ua.theroer.doublelife.doublelife.storage.FileKitStorage;
 import dev.ua.theroer.doublelife.doublelife.storage.FilePersonaStorage;
@@ -14,13 +15,20 @@ import dev.ua.theroer.doublelife.doublelife.storage.FilePlayerSettingsStorage;
 import dev.ua.theroer.doublelife.doublelife.storage.KitStorage;
 import dev.ua.theroer.doublelife.doublelife.storage.PersonaStorage;
 import dev.ua.theroer.doublelife.doublelife.storage.PlayerSettingsStorage;
+import dev.ua.theroer.doublelife.doublelife.storage.db.Database;
+import dev.ua.theroer.doublelife.doublelife.storage.db.JdbcKitStorage;
+import dev.ua.theroer.doublelife.doublelife.storage.db.JdbcPersonaStorage;
+import dev.ua.theroer.doublelife.doublelife.storage.db.JdbcPlayerSettingsStorage;
 import dev.ua.theroer.doublelife.doublelife.webhook.ActionCategory;
 import dev.ua.theroer.doublelife.doublelife.webhook.WebhookManager;
 import dev.ua.theroer.magicutils.Logger;
 import net.luckperms.api.LuckPerms;
 import org.bukkit.Bukkit;
 import org.bukkit.attribute.Attribute;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Mob;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -42,6 +50,7 @@ public class DoubleLifeManager {
     private final PersonaStorage personaStorage;
     private final KitStorage kitStorage;
     private final PlayerSettingsStorage playerSettingsStorage;
+    private final Database database;
     private final WebhookManager webhookManager;
     private final DoubleLifeBossBarManager bossBarManager;
     private final LuckPermsHandler luckPermsHandler;
@@ -54,9 +63,32 @@ public class DoubleLifeManager {
         this.activeSessions = new ConcurrentHashMap<>();
         ItemSerialization itemSerialization = new ItemSerialization(logger);
         this.inventoryStorage = new InventoryStorage(plugin, config.getStoragePath(), itemSerialization);
-        this.personaStorage = new FilePersonaStorage(plugin, config.getStoragePath(), itemSerialization);
-        this.kitStorage = new FileKitStorage(plugin, config.getStoragePath(), itemSerialization);
-        this.playerSettingsStorage = new FilePlayerSettingsStorage(plugin, config.getStoragePath());
+
+        // Persona / kit / player-settings share a storage backend chosen by config.
+        StorageBackend backend = config.getSecondLife().getStorage();
+        Database db = null;
+        if (backend == StorageBackend.SQLITE || backend == StorageBackend.MYSQL) {
+            db = new Database(backend, config.getSecondLife().getDatabase(), plugin.getDataFolder(), logger);
+            try {
+                db.open();
+            } catch (Exception e) {
+                logger.error("Failed to open " + backend + " storage, falling back to files: " + e.getMessage());
+                db.close();
+                db = null;
+            }
+        }
+        this.database = db;
+
+        if (db != null) {
+            this.personaStorage = new JdbcPersonaStorage(db, itemSerialization, logger);
+            this.kitStorage = new JdbcKitStorage(db, itemSerialization, logger);
+            this.playerSettingsStorage = new JdbcPlayerSettingsStorage(db, logger);
+        } else {
+            this.personaStorage = new FilePersonaStorage(plugin, config.getStoragePath(), itemSerialization);
+            this.kitStorage = new FileKitStorage(plugin, config.getStoragePath(), itemSerialization);
+            this.playerSettingsStorage = new FilePlayerSettingsStorage(plugin, config.getStoragePath());
+        }
+
         this.webhookManager = new WebhookManager(logger, config.getWebhooks());
         this.bossBarManager = new DoubleLifeBossBarManager(plugin, config);
         this.luckPermsHandler = new LuckPermsHandler(luckPerms);
@@ -105,6 +137,7 @@ public class DoubleLifeManager {
 
         savePlayerState(player, session);
         applySecondLife(player, session);
+        clearNearbyMobAggro(player);
         applyDoubleLifePermissions(player, session);
 
         activeSessions.put(player.getUniqueId(), session);
@@ -248,6 +281,22 @@ public class DoubleLifeManager {
         // EMPTY leaves the cleared inventory as-is.
     }
 
+    /**
+     * Drops the aggro of hostile mobs that are already locked onto the player
+     * when they enter their second life, so protection applies immediately
+     * instead of only to newly-acquired targets.
+     */
+    private void clearNearbyMobAggro(Player player) {
+        if (!config.getSecondLife().getMobProtection().isEnabled()) {
+            return;
+        }
+        for (Entity entity : player.getNearbyEntities(48, 48, 48)) {
+            if (entity instanceof Mob mob && player.equals(mob.getTarget())) {
+                mob.setTarget(null);
+            }
+        }
+    }
+
     /** Adds a kit's contents to the player without removing what they already hold. */
     private void applyKit(Player player, String kitName) {
         if (kitName == null || kitName.isEmpty()) {
@@ -259,7 +308,7 @@ public class DoubleLifeManager {
             return;
         }
         giveItems(player, kit.inventory);
-        for (org.bukkit.inventory.ItemStack armor : kit.armor) {
+        for (ItemStack armor : kit.armor) {
             if (armor != null) {
                 player.getInventory().addItem(armor);
             }
@@ -277,7 +326,7 @@ public class DoubleLifeManager {
                 logger.warn("DoubleLife always-give kit '" + kitName + "' not found; skipping");
                 continue;
             }
-            for (org.bukkit.inventory.ItemStack item : kit.inventory) {
+            for (ItemStack item : kit.inventory) {
                 if (item != null && !player.getInventory().containsAtLeast(item, item.getAmount())) {
                     player.getInventory().addItem(item.clone());
                 }
@@ -285,8 +334,8 @@ public class DoubleLifeManager {
         }
     }
 
-    private void giveItems(Player player, org.bukkit.inventory.ItemStack[] contents) {
-        for (org.bukkit.inventory.ItemStack item : contents) {
+    private void giveItems(Player player, ItemStack[] contents) {
+        for (ItemStack item : contents) {
             if (item != null) {
                 player.getInventory().addItem(item.clone());
             }
@@ -596,6 +645,9 @@ public class DoubleLifeManager {
             inventoryStorage.saveSession(session);
         }
         webhookManager.shutdown();
+        if (database != null) {
+            database.close();
+        }
     }
 
     public record StartResult(boolean success, String reason) {

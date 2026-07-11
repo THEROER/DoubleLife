@@ -30,6 +30,11 @@ dependencies {
     implementation(project(":common"))
     implementation("com.google.code.gson:gson:2.10.1")
 
+    // JDBC drivers for the SQLite / MySQL persona storage backends. Shaded and
+    // relocated in shadowJar so they never clash with anything on the server.
+    implementation("org.xerial:sqlite-jdbc:3.46.1.3")
+    implementation("org.mariadb.jdbc:mariadb-java-client:3.4.1")
+
     compileOnly("net.luckperms:api:5.4")
     compileOnly("org.projectlombok:lombok:1.18.46")
     annotationProcessor("org.projectlombok:lombok:1.18.46")
@@ -53,6 +58,11 @@ tasks.shadowJar {
     archiveClassifier = ""
     mergeServiceFiles()
     relocate("com.google.gson", "dev.ua.theroer.doublelife.libs.gson")
+    // Relocate the pure-Java MariaDB driver so it can't clash with another
+    // plugin's copy. The SQLite driver is deliberately NOT relocated: its JNI
+    // native library hardcodes the org.sqlite package, so relocating the Java
+    // classes breaks native linking (UnsatisfiedLinkError).
+    relocate("org.mariadb.jdbc", "dev.ua.theroer.doublelife.libs.mariadb")
     // MagicUtils is shaded into this jar (embed mode). Its config-yaml pulls a
     // modern Jackson, but Paper's PluginRemapper injects an older jackson-core
     // (2.13.x) that shadows ours and breaks YAMLParser at enable time

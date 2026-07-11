@@ -3,6 +3,7 @@ package dev.ua.theroer.doublelife.doublelife.storage;
 import dev.ua.theroer.magicutils.Logger;
 import org.bukkit.inventory.ItemStack;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
 /**
@@ -50,6 +51,35 @@ public final class ItemSerialization {
             logger.warn("Failed to serialize item for DoubleLife: " + e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Packs an inventory into a single byte blob for database storage: a
+     * newline-separated list of Base64 items ("-" marks an empty slot).
+     */
+    public byte[] toBlob(ItemStack[] items) {
+        String[] serialized = serializeInventory(items);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < serialized.length; i++) {
+            if (i > 0) {
+                sb.append('\n');
+            }
+            sb.append(serialized[i] == null ? "-" : serialized[i]);
+        }
+        return sb.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    /** Inverse of {@link #toBlob}. */
+    public ItemStack[] fromBlob(byte[] blob) {
+        if (blob == null || blob.length == 0) {
+            return new ItemStack[0];
+        }
+        String[] parts = new String(blob, StandardCharsets.UTF_8).split("\n", -1);
+        String[] serialized = new String[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            serialized[i] = "-".equals(parts[i]) ? null : parts[i];
+        }
+        return deserializeInventory(serialized);
     }
 
     public ItemStack deserializeItem(String base64) {

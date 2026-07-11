@@ -26,6 +26,10 @@ public class SecondLifeSettings {
     @Comment("Where PERSONA data is stored: FILE | SQLITE | MYSQL")
     private StorageBackend storage = StorageBackend.FILE;
 
+    @ConfigSection("database")
+    @Comment("Connection details for the MYSQL storage backend (works with MariaDB too)")
+    private DatabaseSettings database = new DatabaseSettings();
+
     @ConfigSection("swap")
     @Comment("Which parts of player state belong to the second life")
     private SwapSettings swap = new SwapSettings();
